@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import ph.rye.building.AbstractBuilding;
+import ph.rye.building.Direction;
 import ph.rye.building.Floor;
 import ph.rye.building.util.ThreadUtil;
 import ph.rye.common.lang.Ano;
@@ -77,11 +78,15 @@ public class ElevatorController extends Thread {
     public void pressUp(final Floor floor) {
         floor.setPressedUp(true);
         pressUpSet.add(floor);
+
+        ThreadUtil.syncedAction(SharedObject.LOCK_BUTTON, null);
     }
 
     public void pressDown(final Floor floor) {
         floor.setPressedDown(true);
         pressDownSet.add(floor);
+
+        ThreadUtil.syncedAction(SharedObject.LOCK_BUTTON, null);
     }
 
 
@@ -105,13 +110,13 @@ public class ElevatorController extends Thread {
                     "Received lift request, looking for available elevator...");
 
                 Floor floor;
-                Elevator.Direction direction;
+                Direction direction;
                 if (pressUpSet.isEmpty()) {
                     floor = pressDownSet.iterator().next();
-                    direction = Elevator.Direction.DOWN;
+                    direction = Direction.DOWN;
                 } else {
                     floor = pressUpSet.iterator().next();
-                    direction = Elevator.Direction.UP;
+                    direction = Direction.UP;
                 }
 
                 final Elevator elevator = findElevator(floor, direction);
@@ -124,7 +129,7 @@ public class ElevatorController extends Thread {
 
                 } else {
 
-                    ThreadUtil.syncedAction(elevator, () -> {
+                    ThreadUtil.syncedAction(elevator.synchronizer, () -> {
                         LOGGER.info(
                             "Found elevator " + elevator.getNumber()
                                     + " and registered.");
@@ -132,7 +137,7 @@ public class ElevatorController extends Thread {
                         elevator.pressFloor(floor, direction);
                         elevator.setCurrentDirection(direction);
 
-                        if (direction == Elevator.Direction.UP) {
+                        if (direction == Direction.UP) {
                             pressUpSet.remove(floor);
                         } else {
                             pressDownSet.remove(floor);
@@ -153,7 +158,7 @@ public class ElevatorController extends Thread {
      * @param direction requested direction to go.
      */
     private Elevator findElevator(final Floor floor,
-                                  final Elevator.Direction direction) {
+                                  final Direction direction) {
 
         final Ano<Elevator> retval = new Ano<>();
         for (final Elevator elevator : building.getElevatorSet()) {
@@ -162,7 +167,9 @@ public class ElevatorController extends Thread {
                     && elevator.getType() != Elevator.Type.Service) {
                 continue;
             } else {
-                if (!elevator.isFull() && !elevator.isReserved()) {
+                if (!elevator.isFull() && !elevator
+                    .isReserved() && (elevator.getCurrentDirection() == null
+                            || elevator.getCurrentDirection() == direction)) {
                     retval.set(elevator);
                     break;
                 }

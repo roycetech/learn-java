@@ -15,19 +15,24 @@
  */
 package ph.rye.building.facility;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import ph.rye.building.AbstractBuilding;
+import ph.rye.building.Direction;
 import ph.rye.building.Floor;
+import ph.rye.building.thread.Lock;
 
 /**
  * Application specific shared object.
  *
  * @author royce
  */
+@SuppressWarnings("PMD.DoNotUseThreads")
 public final class SharedObject {
 
 
@@ -37,8 +42,8 @@ public final class SharedObject {
     private transient long maxWaitTime;
 
 
-    //    private final transient ConcurrentMap<Person.Type, Floor> elevPersonMap =
-    //            new ConcurrentHashMap<>();
+    public final transient Map<Thread, Object> waitSet = new HashMap<>();
+
 
     private final transient ConcurrentMap<Elevator, Floor> elevFloorMap =
             new ConcurrentHashMap<>();
@@ -46,15 +51,15 @@ public final class SharedObject {
     private final transient ConcurrentMap<Elevator.Type, Set<Elevator>> elevTypeMap =
             new ConcurrentHashMap<>();
 
-    private final transient ConcurrentMap<Elevator, Elevator.Direction> directionMap =
+    private final transient ConcurrentMap<Elevator, Direction> directionMap =
             new ConcurrentHashMap<>();
 
 
     /** Lock for registering people to elevator. */
-    public static final Object LOCK_PERSON_REG = new Object();
+    public static final Object LOCK_PERSON_REG = new Lock("Person");
 
     /** Lock for registering presses on the outside of the elevator. */
-    static final Object LOCK_FLR_REG = new Object();
+    static final Object LOCK_FLR_REG = new Lock("Floor");
 
 
     /**
@@ -62,11 +67,11 @@ public final class SharedObject {
      * waits on this. Person notifies by pressing button from floor or by
      * choosing floor inside the elevator.
      */
-    public static final Object LOCK_BUTTON = new Object();
+    public static final Object LOCK_BUTTON = new Lock("Button");
 
 
     /** Lock for finding an elevator. Notify on door close. */
-    static final Object LOCK_FIND_ELEV = new Object();
+    static final Object LOCK_FIND_ELEV = new Lock("Find");
 
 
     private SharedObject() {}
@@ -82,7 +87,7 @@ public final class SharedObject {
     }
 
     public void setDirection(final Elevator elevator,
-                             final Elevator.Direction direction) {
+                             final Direction direction) {
         directionMap.put(elevator, direction);
     }
 

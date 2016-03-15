@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.logging.Logger;
 
 import ph.rye.building.facility.Elevator;
 import ph.rye.building.facility.ElevatorController;
 import ph.rye.building.facility.SharedObject;
+import ph.rye.logging.OneLogger;
 
 /**
  * @author royce
@@ -32,15 +32,13 @@ import ph.rye.building.facility.SharedObject;
 public abstract class AbstractBuilding {
 
 
-    private static final Logger LOGGER =
-            Logger.getLogger(AbstractBuilding.class.getName());
+    private static final OneLogger LOGGER = OneLogger.getInstance();
 
 
     /** Maps floor description to Floor Object */
     private final transient Map<String, Floor> descFloorMap = new HashMap<>();
 
 
-    //    private final transient int storey;
     private transient Floor[] floors;
 
 
@@ -92,8 +90,6 @@ public abstract class AbstractBuilding {
             String.format(
                 "Building %s is now operating!",
                 getClass().getSimpleName()));
-
-
     }
 
 

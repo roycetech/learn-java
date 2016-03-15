@@ -56,49 +56,45 @@ public final class BuildingMain {
      */
     static void case2(final AbstractBuilding bldg) {
 
-        final Thread person1 = new Thread(
-            new Person(
-                "Mitchie",
-                bldg.getController(),
-                Person.Type.Manager,
-                bldg.getFloor("G"),
-                bldg.getFloor("2"),
-                2000));
+        final Person person1 = new Person(
+            "Mitchie",
+            bldg.getController(),
+            Person.Type.Manager,
+            bldg.getFloor("G"),
+            bldg.getFloor("2"),
+            2000);
         person1.setPriority(Thread.NORM_PRIORITY);
-        person1.setName("Mitchie");
+        person1.setPersonName("Mitchie");
 
-        final Thread person2 = new Thread(
-            new Person(
-                "Royce",
-                bldg.getController(),
-                Person.Type.Resident,
-                bldg.getFloor("G"),
-                bldg.getFloor("2"),
-                4000));
+        final Person person2 = new Person(
+            "Royce",
+            bldg.getController(),
+            Person.Type.Resident,
+            bldg.getFloor("G"),
+            bldg.getFloor("2"),
+            4000);
         person2.setPriority(Thread.NORM_PRIORITY);
-        person2.setName("Royce");
+        person2.setPersonName("Royce");
 
-        final Thread person3 = new Thread(
-            new Person(
-                "Rye",
-                bldg.getController(),
-                Person.Type.Resident,
-                bldg.getFloor("G"),
-                bldg.getFloor("2"),
-                6000));
+        final Person person3 = new Person(
+            "Rye",
+            bldg.getController(),
+            Person.Type.Resident,
+            bldg.getFloor("G"),
+            bldg.getFloor("2"),
+            6000);
         person3.setPriority(Thread.NORM_PRIORITY);
-        person3.setName("Rye");
+        person3.setPersonName("Rye");
 
-        final Thread person4 = new Thread(
-            new Person(
-                "Lucy",
-                bldg.getController(),
-                Person.Type.Resident,
-                bldg.getFloor("G"),
-                bldg.getFloor("2"),
-                6000));
+        final Person person4 = new Person(
+            "Lucy",
+            bldg.getController(),
+            Person.Type.Resident,
+            bldg.getFloor("G"),
+            bldg.getFloor("2"),
+            6000);
         person4.setPriority(Thread.NORM_PRIORITY);
-        person4.setName("Lucy");
+        person4.setPersonName("Lucy");
 
         person1.start();
         person2.start();
