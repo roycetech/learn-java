@@ -15,12 +15,12 @@
  */
 package ph.rye.building;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
 import ph.rye.building.facility.Elevator;
 import ph.rye.common.lang.Ano;
-import ph.rye.logging.OneLogger;
 
 /**
  * This serves as Monitor for Person. A floor alerts people when it opens on
@@ -31,7 +31,7 @@ import ph.rye.logging.OneLogger;
 public class Floor {
 
 
-    private static final OneLogger LOGGER = OneLogger.getInstance();
+    // private static final OneLogger LOGGER = OneLogger.getInstance();
 
 
     public enum Type {
@@ -50,8 +50,11 @@ public class Floor {
     private transient boolean pressedDown;
 
 
-    private final transient Set<Person> pplGoingDownSet = new HashSet<>();
-    private final transient Set<Person> pplGoingUpSet = new HashSet<>();
+    private final transient Set<Person> pplGoingDownSet =
+            Collections.synchronizedSet(new HashSet<>());
+
+    private final transient Set<Person> pplGoingUpSet =
+            Collections.synchronizedSet(new HashSet<>());
 
     private final transient Set<Elevator> liftPresent = new HashSet<>();
 
@@ -175,8 +178,11 @@ public class Floor {
 
     void addPersonWaiting(final Person person) {
         if (person.isGoingUp()) {
+            assert(buttonAvailable & BTN_UP) > 0;
             pplGoingUpSet.add(person);
+
         } else {
+            assert(buttonAvailable & BTN_DOWN) > 0;
             pplGoingDownSet.add(person);
         }
     }
@@ -195,6 +201,14 @@ public class Floor {
         } else {
             return !pplGoingDownSet.isEmpty();
         }
+    }
+
+    public Set<Person> getPeopleGoingUp() {
+        return pplGoingUpSet;
+    }
+
+    public Set<Person> getPeopleGoingDown() {
+        return pplGoingDownSet;
     }
 
 }

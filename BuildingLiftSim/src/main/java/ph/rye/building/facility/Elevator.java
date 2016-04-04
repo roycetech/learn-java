@@ -193,14 +193,24 @@ public class Elevator extends Thread {
 
 
     /** */
+    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
     private void waitUntilNoMorePeopleEnteringOrLeaving() {
         LOGGER.info("waiting for people to enter or leave...");
         while (!isFull() && getCurrentFloor().hasPeopleWaiting(currentDirection)
                 || hasPeopleExiting()) {
             LOGGER.debugf(
-                "Full: %s, people waiting: %s",
+                new StringBuilder(16)
+                    .append("Full: %s")
+                    .append(", people waiting to enter: %s")
+                    .append(", wanting to exit: %s, %s")
+                    .toString(),
                 isFull(),
-                getCurrentFloor().hasPeopleWaiting(currentDirection));
+                getCurrentFloor().hasPeopleWaiting(currentDirection) + " "
+                        + (currentDirection == Direction.UP
+                                ? getCurrentFloor().getPeopleGoingUp()
+                                : getCurrentFloor().getPeopleGoingDown()),
+                hasPeopleExiting() + " " + personInside,
+                currentDirection);
             /* Wait but timeout after sometime and don't expect to be told to wake up. */
             ThreadUtil.wait(door, 3000);
         }
@@ -221,6 +231,10 @@ public class Elevator extends Thread {
         }
 
         return retval.get();
+    }
+
+    public boolean hasPeopleInside() {
+        return !personInside.isEmpty();
     }
 
     /**
@@ -244,6 +258,10 @@ public class Elevator extends Thread {
 
     public void pressFloor(final Floor floor, final Direction direction) {
         LOGGER.debug("Stop requested at " + floor + ", to go " + direction);
+        if (pressedFloorSet.isEmpty()) {
+            currentDirection = direction;
+        }
+
         targetFloors.put(floor, direction);
         pressedFloorSet.add(floor);
     }

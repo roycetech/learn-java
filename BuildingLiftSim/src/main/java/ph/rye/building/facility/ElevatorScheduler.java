@@ -52,7 +52,7 @@ import ph.rye.logging.OneLogger;
  *
  */
 @SuppressWarnings("PMD.DoNotUseThreads")
-public class ElevatorController extends Thread {
+public class ElevatorScheduler extends Thread {
 
 
     private static final OneLogger LOGGER = OneLogger.getInstance();
@@ -68,10 +68,10 @@ public class ElevatorController extends Thread {
     private final transient AbstractBuilding building;
 
 
-    public ElevatorController(final AbstractBuilding building) {
+    public ElevatorScheduler(final AbstractBuilding building) {
         this.building = building;
         setPriority(MAX_PRIORITY);
-        setName("Elevator Controller");
+        setName("Elevator Scheduler");
     }
 
 

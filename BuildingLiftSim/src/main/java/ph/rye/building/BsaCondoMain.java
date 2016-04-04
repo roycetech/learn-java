@@ -15,7 +15,7 @@ package ph.rye.building;
  *  limitations under the License.
  */
 
-import ph.rye.building.facility.ElevatorController;
+import ph.rye.building.facility.ElevatorScheduler;
 
 /**
  * @author royce
@@ -39,7 +39,7 @@ public final class BsaCondoMain {
 
         building.operate();
 
-        final ElevatorController controller = building.getController();
+        final ElevatorScheduler controller = building.getController();
 
         final Thread person1 = new Thread(
             new Person(

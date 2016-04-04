@@ -16,7 +16,7 @@
 package ph.rye.building;
 
 import ph.rye.building.facility.Elevator;
-import ph.rye.building.facility.ElevatorController;
+import ph.rye.building.facility.ElevatorScheduler;
 import ph.rye.building.util.ThreadUtil;
 import ph.rye.common.lang.Ano;
 import ph.rye.logging.OneLogger;
@@ -43,7 +43,7 @@ public class Person extends Thread {
     private transient int capacity = 1;
 
 
-    private final transient ElevatorController controller;
+    private final transient ElevatorScheduler controller;
 
 
     private transient Floor currentFloor;
@@ -121,10 +121,7 @@ public class Person extends Thread {
 
         //  ThreadUtil.safeWait(()->!elevator.get().getCurrentFloor().equals(desiredFloor),elevator,()->LOGGER.debug("["+name+"] is waiting to reach desired floor..."),()->LOGGER.info(String.format("%s arrived at destination, thanks!",name)));
 
-
-        waitForElevatorToOpenAtFloor(elevator.get(), currentFloor);
-
-
+        waitForElevatorToOpenAtFloor(elevator.get(), getDesiredFloor());
         leaveElevator(elevator.get());
     }
 
@@ -175,12 +172,13 @@ public class Person extends Thread {
 
                 ThreadUtil.syncedAction(
                     elevator.door,
-                    () -> ThreadUtil.longAction(
-                        () -> LOGGER.info(
+                    () -> ThreadUtil.longAction(() -> {
+                        LOGGER.info(
                             "[" + name + "] is now entering lift: E"
-                                    + elevator.getNumber()),
-                        () -> elevator.admitPerson(this),
-                        2000));
+                                    + elevator.getNumber());
+                        elevator.admitPerson(this);
+                        // currentFloor.removePersonWaiting(this);
+                    } , null, 2000));
 
                 if (!elevator.isFloorPressed(desiredFloor)) {
                     LOGGER.info(
@@ -239,11 +237,12 @@ public class Person extends Thread {
         }
     }
 
-    Person(final String name, final ElevatorController controller,
+    Person(final String name, final ElevatorScheduler controller,
             final Type type, final Floor currentFloor, final Floor desiredFloor,
             final int delayMs) {
 
         this.name = name;
+        setName(name);
         this.controller = controller;
 
         this.type = type;
@@ -257,6 +256,7 @@ public class Person extends Thread {
 
         this.delayMs = delayMs;
 
+        setPriority(NORM_PRIORITY);
     }
 
     public Person initCapacity(final int capacity) {

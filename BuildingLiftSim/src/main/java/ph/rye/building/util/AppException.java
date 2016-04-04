@@ -19,13 +19,17 @@ package ph.rye.building.util;
  * @author royce
  *
  */
-final class AppException extends RuntimeException {
+public final class AppException extends RuntimeException {
 
     /** */
     private static final long serialVersionUID = -1514194298908253354L;
 
     public AppException(final Throwable throwable) {
         super(throwable);
+    }
+
+    public AppException(final String message) {
+        super(message);
     }
 
 }

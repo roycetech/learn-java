@@ -22,8 +22,11 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import ph.rye.building.facility.Elevator;
-import ph.rye.building.facility.ElevatorController;
+import ph.rye.building.facility.ElevatorScheduler;
 import ph.rye.building.facility.SharedObject;
+import ph.rye.building.util.AppException;
+import ph.rye.building.util.ThreadUtil;
+import ph.rye.common.lang.Ano;
 import ph.rye.logging.OneLogger;
 
 /**
@@ -48,8 +51,8 @@ public abstract class AbstractBuilding {
             .compareTo(elevator2.getType()));
 
 
-    private final transient ElevatorController controller =
-            new ElevatorController(this);
+    private final transient ElevatorScheduler controller =
+            new ElevatorScheduler(this);
 
 
     protected abstract void initFloors();
@@ -68,6 +71,25 @@ public abstract class AbstractBuilding {
     protected void addElevator(final Elevator elevator) {
         elevatorSet.add(elevator);
         SharedObject.getInstance().registerElevator(elevator);
+    }
+
+    void setStartingFloor(final int elevatorNumber, final String floor) {
+        final Elevator elevator = getElevatorByNumber(elevatorNumber);
+        elevator.setCurrentFloor(getFloor(elevatorNumber));
+    }
+
+    Elevator getElevatorByNumber(final int number) {
+
+        final Ano<Elevator> retval = new Ano<>();
+        for (final Elevator elevator : elevatorSet) {
+            if (elevator.getNumber() == number) {
+                retval.set(elevator);
+                break;
+            }
+        }
+
+        assert retval.get() != null;
+        return retval.get();
     }
 
     public Floor getFloor(final int floorNumber) {
@@ -96,7 +118,7 @@ public abstract class AbstractBuilding {
     /**
      * @return the controller
      */
-    ElevatorController getController() {
+    ElevatorScheduler getController() {
         return controller;
     }
 
@@ -116,7 +138,34 @@ public abstract class AbstractBuilding {
         for (final Floor floor : floorList) {
             descFloorMap.put(floor.getDisplay(), floor);
         }
+    }
 
+
+    /**
+     * Main thread will wait for couple of seconds before verifying that
+     * everyone is happy.
+     */
+    void verifyLiftsAndFloorsAreEmpty(final long secondsToWait) {
+
+        assert secondsToWait > 0;
+
+        ThreadUtil.sleep(1000 * secondsToWait);
+
+        for (int i = 0; i < floors.length; i++) {
+            if (floors[i].hasPeopleWaiting(Direction.UP)
+                    || floors[i].hasPeopleWaiting(Direction.DOWN)) {
+                throw new AppException("People waiting at: " + floors[i] + "!");
+            }
+        }
+
+        for (final Elevator elevator : elevatorSet) {
+            if (elevator.hasPeopleInside()) {
+                throw new AppException(
+                    "Person detected inside E" + elevator.getNumber() + "!");
+            }
+        }
+
+        LOGGER.info("Looks like everyone has gone about their business happy!");
     }
 
 }
