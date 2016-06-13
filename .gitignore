@@ -9,3 +9,4 @@ bin
 .recommenders
 .gradle
 build
+/WebSocketHome/nbproject/private/
