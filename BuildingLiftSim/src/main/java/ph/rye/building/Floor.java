@@ -15,7 +15,6 @@
  */
 package ph.rye.building;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -31,7 +30,7 @@ import ph.rye.common.lang.Ano;
 public class Floor {
 
 
-    // private static final OneLogger LOGGER = OneLogger.getInstance();
+    //    private static final OneLogger LOG1 = OneLogger.getInstance();
 
 
     public enum Type {
@@ -50,13 +49,10 @@ public class Floor {
     private transient boolean pressedDown;
 
 
-    private final transient Set<Person> pplGoingDownSet =
-            Collections.synchronizedSet(new HashSet<>());
+    private final transient Set<Person> peopleWaitingSet = new HashSet<>();
 
-    private final transient Set<Person> pplGoingUpSet =
-            Collections.synchronizedSet(new HashSet<>());
+    private final transient Set<Elevator> openLiftDoors = new HashSet<>();
 
-    private final transient Set<Elevator> liftPresent = new HashSet<>();
 
     private final transient byte buttonAvailable;
 
@@ -75,6 +71,22 @@ public class Floor {
         this.buttonAvailable = buttonAvailable;
     }
 
+    //    public boolean isSpecial() {
+    //        return number == MAX_VALUE || number == MAX_VALUE - 1;
+    //    }
+    //
+    //    public boolean isService() {
+    //        return number == 2;
+    //    }
+    //
+    //    public boolean isCommon() {
+    //        return number == 5 || number == 2;
+    //    }
+    //
+    //
+    //    public boolean isRegular() {
+    //        return !isSpecial() && !isService() && !isCommon();
+    //    }
 
     /**
      * @return the number
@@ -151,64 +163,41 @@ public class Floor {
         return getClass().getSimpleName() + " " + getDisplay();
     }
 
-    public void arriveElevator(final Elevator elevator) {
-        liftPresent.add(elevator);
+    /**
+     * @param elevator
+     */
+    public void markDoorAsOpen(final Elevator elevator) {
+        openLiftDoors.add(elevator);
+
         synchronized (elevator) {
             elevator.notifyAll();
         }
-    }
-
-    public void departElevator(final Elevator elevator) {
-        liftPresent.remove(elevator);
     }
 
     /**
      * @param elevator
      */
     public void markDoorAsClosed(final Elevator elevator) {
-        liftPresent.remove(elevator);
+        openLiftDoors.remove(elevator);
     }
 
     /**
      * @return
      */
     public Set<Elevator> getOpenDoors() {
-        return liftPresent;
+        return openLiftDoors;
     }
 
     void addPersonWaiting(final Person person) {
-        if (person.isGoingUp()) {
-            assert(buttonAvailable & BTN_UP) > 0;
-            pplGoingUpSet.add(person);
-
-        } else {
-            assert(buttonAvailable & BTN_DOWN) > 0;
-            pplGoingDownSet.add(person);
-        }
+        peopleWaitingSet.add(person);
     }
 
     void removePersonWaiting(final Person person) {
-        if (person.isGoingUp()) {
-            pplGoingUpSet.remove(person);
-        } else {
-            pplGoingDownSet.remove(person);
-        }
+        peopleWaitingSet.remove(person);
     }
 
-    public boolean hasPeopleWaiting(final Direction direction) {
-        if (direction == Direction.UP) {
-            return !pplGoingUpSet.isEmpty();
-        } else {
-            return !pplGoingDownSet.isEmpty();
-        }
-    }
-
-    public Set<Person> getPeopleGoingUp() {
-        return pplGoingUpSet;
-    }
-
-    public Set<Person> getPeopleGoingDown() {
-        return pplGoingDownSet;
+    public boolean hasPeopleWaiting() {
+        return !peopleWaitingSet.isEmpty();
     }
 
 }

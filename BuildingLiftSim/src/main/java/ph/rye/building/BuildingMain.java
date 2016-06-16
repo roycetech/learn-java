@@ -23,9 +23,7 @@ import ph.rye.logging.OneLogger;
  * @author royce
  *
  */
-@SuppressWarnings({
-        "PMD.DoNotUseThreads",
-        "PMD.ShortVariable" /* For person names only.*/ })
+@SuppressWarnings("PMD.DoNotUseThreads")
 public final class BuildingMain {
 
 
@@ -36,19 +34,89 @@ public final class BuildingMain {
 
 
     /**
+     * Single Person. Elevator on same floor.
+     */
+    static void case1(final AbstractBuilding bldg) {
+
+        final Thread person1 = new Thread(
+            new Person(
+                "Mitchie",
+                bldg.getController(),
+                Person.Type.Manager,
+                bldg.getFloor("G"),
+                bldg.getFloor("2"),
+                2000));
+        person1.setPriority(Thread.NORM_PRIORITY);
+
+        person1.start();
+    }
+
+    /**
+     * Single Person. Elevator on same floor.
+     */
+    static void case2(final AbstractBuilding bldg) {
+
+        final Thread person1 = new Thread(
+            new Person(
+                "Mitchie",
+                bldg.getController(),
+                Person.Type.Manager,
+                bldg.getFloor("G"),
+                bldg.getFloor("2"),
+                2000));
+        person1.setPriority(Thread.NORM_PRIORITY);
+        person1.setName("Mitchie");
+
+        final Thread person2 = new Thread(
+            new Person(
+                "Royce",
+                bldg.getController(),
+                Person.Type.Resident,
+                bldg.getFloor("G"),
+                bldg.getFloor("2"),
+                4000));
+        person2.setPriority(Thread.NORM_PRIORITY);
+        person2.setName("Royce");
+
+        final Thread person3 = new Thread(
+            new Person(
+                "Rye",
+                bldg.getController(),
+                Person.Type.Resident,
+                bldg.getFloor("G"),
+                bldg.getFloor("2"),
+                6000));
+        person3.setPriority(Thread.NORM_PRIORITY);
+        person3.setName("Rye");
+
+        final Thread person4 = new Thread(
+            new Person(
+                "Lucy",
+                bldg.getController(),
+                Person.Type.Resident,
+                bldg.getFloor("G"),
+                bldg.getFloor("2"),
+                6000));
+        person4.setPriority(Thread.NORM_PRIORITY);
+        person4.setName("Lucy");
+
+        person1.start();
+        person2.start();
+        person3.start();
+        person4.start();
+    }
+
+    /**
      * @param args
      */
     public static void main(final String[] args) {
 
         LOGGER.info("Simulation started!");
 
-        final Building2F1E bldg = new Building2F1E();
+        final AbstractBuilding bldg = new Building2F1E();
         bldg.operate();
 
-        bldg.simCase4();
-
-        bldg.verifyLiftsAndFloorsAreEmpty(60);
-
+        case2(bldg);
     }
 
 }

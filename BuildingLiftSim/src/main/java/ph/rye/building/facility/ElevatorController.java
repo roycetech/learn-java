@@ -19,7 +19,6 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import ph.rye.building.AbstractBuilding;
-import ph.rye.building.Direction;
 import ph.rye.building.Floor;
 import ph.rye.building.util.ThreadUtil;
 import ph.rye.common.lang.Ano;
@@ -52,7 +51,7 @@ import ph.rye.logging.OneLogger;
  *
  */
 @SuppressWarnings("PMD.DoNotUseThreads")
-public class ElevatorScheduler extends Thread {
+public class ElevatorController extends Thread {
 
 
     private static final OneLogger LOGGER = OneLogger.getInstance();
@@ -68,25 +67,21 @@ public class ElevatorScheduler extends Thread {
     private final transient AbstractBuilding building;
 
 
-    public ElevatorScheduler(final AbstractBuilding building) {
+    public ElevatorController(final AbstractBuilding building) {
         this.building = building;
         setPriority(MAX_PRIORITY);
-        setName("Elevator Scheduler");
+        setName("Elevator Controller");
     }
 
 
     public void pressUp(final Floor floor) {
         floor.setPressedUp(true);
         pressUpSet.add(floor);
-
-        ThreadUtil.syncedAction(SharedObject.LOCK_BUTTON, null);
     }
 
     public void pressDown(final Floor floor) {
         floor.setPressedDown(true);
         pressDownSet.add(floor);
-
-        ThreadUtil.syncedAction(SharedObject.LOCK_BUTTON, null);
     }
 
 
@@ -110,13 +105,13 @@ public class ElevatorScheduler extends Thread {
                     "Received lift request, looking for available elevator...");
 
                 Floor floor;
-                Direction direction;
+                Elevator.Direction direction;
                 if (pressUpSet.isEmpty()) {
                     floor = pressDownSet.iterator().next();
-                    direction = Direction.DOWN;
+                    direction = Elevator.Direction.DOWN;
                 } else {
                     floor = pressUpSet.iterator().next();
-                    direction = Direction.UP;
+                    direction = Elevator.Direction.UP;
                 }
 
                 final Elevator elevator = findElevator(floor, direction);
@@ -129,7 +124,7 @@ public class ElevatorScheduler extends Thread {
 
                 } else {
 
-                    ThreadUtil.syncedAction(elevator.synchronizer, () -> {
+                    ThreadUtil.syncedAction(elevator, () -> {
                         LOGGER.info(
                             "Found elevator " + elevator.getNumber()
                                     + " and registered.");
@@ -137,7 +132,7 @@ public class ElevatorScheduler extends Thread {
                         elevator.pressFloor(floor, direction);
                         elevator.setCurrentDirection(direction);
 
-                        if (direction == Direction.UP) {
+                        if (direction == Elevator.Direction.UP) {
                             pressUpSet.remove(floor);
                         } else {
                             pressDownSet.remove(floor);
@@ -158,7 +153,7 @@ public class ElevatorScheduler extends Thread {
      * @param direction requested direction to go.
      */
     private Elevator findElevator(final Floor floor,
-                                  final Direction direction) {
+                                  final Elevator.Direction direction) {
 
         final Ano<Elevator> retval = new Ano<>();
         for (final Elevator elevator : building.getElevatorSet()) {
@@ -167,9 +162,7 @@ public class ElevatorScheduler extends Thread {
                     && elevator.getType() != Elevator.Type.Service) {
                 continue;
             } else {
-                if (!elevator.isFull() && !elevator
-                    .isReserved() && (elevator.getCurrentDirection() == null
-                            || elevator.getCurrentDirection() == direction)) {
+                if (!elevator.isFull() && !elevator.isReserved()) {
                     retval.set(elevator);
                     break;
                 }

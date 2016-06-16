@@ -21,14 +21,11 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import ph.rye.building.AbstractBuilding;
-import ph.rye.building.Direction;
-import ph.rye.building.DoorState;
 import ph.rye.building.Floor;
 import ph.rye.building.Person;
-import ph.rye.building.thread.Lock;
 import ph.rye.building.util.ThreadUtil;
 import ph.rye.common.lang.Ano;
-import ph.rye.common.lang.Range;
+import ph.rye.common.loop.Range;
 import ph.rye.logging.OneLogger;
 
 /**
@@ -43,15 +40,16 @@ public class Elevator extends Thread {
     private static final OneLogger LOGGER = OneLogger.getInstance();
 
 
-    public static final int MAX_SPACE = 20;
+    public static final float MAX_SPACE = 20;
 
 
     private final static long ASCEND_PER_FLR_MS = 2000;
     private final static long DSCEND_PER_FLR_MS = 2000;
 
 
-    public final transient Object synchronizer = new Lock("Lift");
-
+    public enum Direction {
+        UP, DOWN;
+    }
 
     public enum Type {
         Regular, Special, Service
@@ -63,15 +61,12 @@ public class Elevator extends Thread {
 
 
     private transient Direction currentDirection;
-
-    /** Used as monitor by people and the elevator. */
-    public final transient Lock door = new Lock("Door");
-
+    private transient int currentOccupant;
 
     private final transient Type type;
     private final transient int number;
+    private transient boolean open;
 
-    private transient DoorState doorState = DoorState.CLOSED;
     private transient Floor currentFloor;
     private final transient Range<?> range;
 
@@ -82,8 +77,11 @@ public class Elevator extends Thread {
      * These are floors registered by passengers and floor for pick up as chosen
      * by the controller.
      */
-    private final transient Map<Floor, Direction> targetFloors = new TreeMap<>(
-        (floor1, floor2) -> floor1.getIndex().compareTo(floor2.getIndex()));
+    private final transient Map<Floor, Elevator.Direction> targetFloors =
+            new TreeMap<>(
+                (floor1, floor2) -> floor1
+                    .getIndex()
+                    .compareTo(floor2.getIndex()));
 
     private final transient Set<Person> personInside = new HashSet<>();
 
@@ -128,125 +126,89 @@ public class Elevator extends Thread {
             if (targetFloors.isEmpty()) {
 
                 ThreadUtil.wait(
-                    synchronizer,
+                    this,
                     () -> LOGGER.debug(
                         "E" + number
                                 + " has no request, so it'll wait to save power."));
 
             } else {
-
-                final Floor closestFloor = findClosestFloorInQueue();
+                final Floor closestFloor = getClosestFloor();
                 if (closestFloor.equals(currentFloor)) {
 
                     LOGGER.debug(
                         "E" + getNumber() + " is at the requested floor.");
-
                     pressedFloorSet.remove(currentFloor);
 
-                    /* If pressed by people outside, clear the UP/DOWN from panel. */
                     final Direction targetDirection =
                             targetFloors.get(closestFloor);
-                    if (targetDirection == Direction.UP) {
+
+                    if (targetDirection == Elevator.Direction.UP) {
                         currentFloor.setPressedUp(false);
                     } else {
                         currentFloor.setPressedDown(false);
                     }
                     currentDirection = targetDirection;
 
-
-                    ThreadUtil.syncedAction(synchronizer, () -> {});
-
-                    targetFloors.remove(closestFloor);
-                    openDoor();
+                    ThreadUtil.syncedAction(this, () -> {
+                        targetFloors.remove(closestFloor);
+                        openDoor();
+                    });
 
                     /* Allow people to enter/leave. */
-                    ThreadUtil.longAction(
-                        () -> LOGGER.info(
-                            "Giving initial 3secs for people to enter/exit"),
-                        null,
-                        3000);
+                    ThreadUtil.longAction(null, 3000);
 
-                    waitUntilNoMorePeopleEnteringOrLeaving();
+                    waitForPeopleToComeInside();
 
                     /* People would lock while entering, will close door only
                      * after everyone within capacity is inside.*/
-                    synchronized (synchronizer) {
+                    synchronized (this) {
                         closeDoor();
                     }
 
                 } else {
-                    move();
+
+                    ThreadUtil.sleep(1000);
+                    if (currentDirection == Direction.UP) {
+                        moveUp();
+                    } else {
+                        moveDown();
+                    }
+                    ThreadUtil.sleep(1000);
                 }
             }
         }
     }
 
-    void move() {
-        ThreadUtil.sleep(1000);
-        if (currentDirection == Direction.UP) {
-            moveUp();
-        } else {
-            moveDown();
-        }
-        ThreadUtil.sleep(1000);
-    }
 
+    /**
+     *
+     */
+    private void waitForPeopleToComeInside() {
 
-    /** */
-    @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
-    private void waitUntilNoMorePeopleEnteringOrLeaving() {
-        LOGGER.info("waiting for people to enter or leave...");
-        while (!isFull() && getCurrentFloor().hasPeopleWaiting(currentDirection)
-                || hasPeopleExiting()) {
-            LOGGER.debugf(
-                new StringBuilder(16)
-                    .append("Full: %s")
-                    .append(", people waiting to enter: %s")
-                    .append(", wanting to exit: %s, %s")
-                    .toString(),
-                isFull(),
-                getCurrentFloor().hasPeopleWaiting(currentDirection) + " "
-                        + (currentDirection == Direction.UP
-                                ? getCurrentFloor().getPeopleGoingUp()
-                                : getCurrentFloor().getPeopleGoingDown()),
-                hasPeopleExiting() + " " + personInside,
-                currentDirection);
-            /* Wait but timeout after sometime and don't expect to be told to wake up. */
-            ThreadUtil.wait(door, 3000);
+        while (!isFull() && getCurrentFloor().hasPeopleWaiting()) {
+
+            LOGGER.debug("Waiting for people to come inside.");
+            LOGGER.debug(
+                String.format(
+                    "Full: %s, people waiting: %s",
+                    isFull(),
+                    getCurrentFloor().hasPeopleWaiting()));
+
+            ThreadUtil.wait(this, null, 3000);
         }
-        LOGGER.info("With " + personInside + " now proceeding...");
+
     }
 
     /**
      * @return
      */
-    private boolean hasPeopleExiting() {
-        final Ano<Boolean> retval = new Ano<>(false);
-
-        for (final Person person : personInside) {
-            if (person.getDesiredFloor().equals(currentFloor)) {
-                retval.set(true);
-                break;
-            }
-        }
-
-        return retval.get();
-    }
-
-    public boolean hasPeopleInside() {
-        return !personInside.isEmpty();
-    }
-
-    /**
-     * @return
-     */
-    private Floor findClosestFloorInQueue() {
+    private Floor getClosestFloor() {
         final Ano<Floor> closest = new Ano<>();
         for (final Floor floor : targetFloors.keySet()) {
             if (closest.get() == null) {
                 closest.set(floor);
-            } else
-                if (Math.abs(currentFloor.getIndex() - floor.getIndex()) < Math
+            } else if (Math
+                .abs(currentFloor.getIndex() - floor.getIndex()) < Math
                     .abs(closest.get().getIndex() - floor.getIndex())) {
                 closest.set(floor);
             }
@@ -256,12 +218,9 @@ public class Elevator extends Thread {
         return closest.get();
     }
 
-    public void pressFloor(final Floor floor, final Direction direction) {
+    public void pressFloor(final Floor floor,
+                           final Elevator.Direction direction) {
         LOGGER.debug("Stop requested at " + floor + ", to go " + direction);
-        if (pressedFloorSet.isEmpty()) {
-            currentDirection = direction;
-        }
-
         targetFloors.put(floor, direction);
         pressedFloorSet.add(floor);
     }
@@ -279,7 +238,6 @@ public class Elevator extends Thread {
             ThreadUtil.longAction(
                 () -> LOGGER
                     .info(String.format("E%d is going up", getNumber())),
-                null,
                 ASCEND_PER_FLR_MS);
 
             currentFloor = building.getFloor(currentFloor.getIndex() + 1);
@@ -287,12 +245,11 @@ public class Elevator extends Thread {
             LOGGER.info(
                 String.format("E%d is now at %S", getNumber(), currentFloor));
 
+            ThreadUtil.syncedAction(this, () -> LOGGER.info("DING!"));
+
             for (final Person person : personInside) {
                 person.setCurrentFloor(currentFloor);
             }
-
-            ThreadUtil.syncedAction(synchronizer, () -> LOGGER.info("DING!"));
-
 
             synchronized (SharedObject.LOCK_FLR_REG) {
                 SharedObject.getInstance().setFloor(this, currentFloor);
@@ -310,7 +267,6 @@ public class Elevator extends Thread {
             ThreadUtil.longAction(
                 () -> LOGGER
                     .info(String.format("E%d is going down", getNumber())),
-                null,
                 DSCEND_PER_FLR_MS);
 
             currentFloor = building.getFloor(currentFloor.getIndex() - 1);
@@ -318,7 +274,7 @@ public class Elevator extends Thread {
             LOGGER.info(
                 String.format("E%d is now at %S", getNumber(), currentFloor));
 
-            ThreadUtil.syncedAction(synchronizer, () -> LOGGER.info("DING!"));
+            ThreadUtil.syncedAction(this, () -> LOGGER.info("DING!"));
 
             synchronized (SharedObject.LOCK_FLR_REG) {
                 SharedObject.getInstance().setFloor(this, currentFloor);
@@ -331,41 +287,30 @@ public class Elevator extends Thread {
 
     public void admitPerson(final Person person) {
         personInside.add(person);
-    }
-
-    public void dischargePerson(final Person person) {
-        personInside.remove(person);
+        currentOccupant += person.getCapacity();
     }
 
     private void openDoor() {
+        LOGGER.info("E" + number + " is opening door...");
 
-        ThreadUtil.syncedAction(door, () -> {
-
-            ThreadUtil.longAction(() -> {
-                currentFloor.arriveElevator(this);
-                LOGGER.info("E" + number + " is opening door...");
-                doorState = DoorState.OPENING;
-            } , null, 3000);
-
-            ThreadUtil.syncedAction(
-                currentFloor,
-                () -> ThreadUtil.syncedAction(synchronizer, () -> {
-                doorState = DoorState.OPEN;
+        ThreadUtil.longAction(() -> currentFloor.markDoorAsOpen(this), 3000);
+        ThreadUtil.syncedAction(
+            currentFloor,
+            () -> ThreadUtil.syncedAction(this, () -> {
+                open = true;
                 LOGGER.info("E" + number + " is now open at " + currentFloor);
             }));
 
-        });
     }
 
     private void closeDoor() {
-        ThreadUtil.syncedAction(door, () -> ThreadUtil.longAction(() -> {
-            LOGGER.info("E" + number + " is closing door...");
-            doorState = DoorState.CLOSING;
-        } , () -> {
-            doorState = DoorState.CLOSED;
-            LOGGER.info("E" + number + " is closed!");
-            currentFloor.markDoorAsClosed(this);
-        } , 3000));
+        ThreadUtil.longAction(
+            () -> LOGGER.info("E" + number + " is closing door..."),
+            3000);
+
+        open = false;
+        LOGGER.info("E" + number + " is closed!");
+        currentFloor.markDoorAsClosed(this);
 
         synchronized (SharedObject.LOCK_FIND_ELEV) {
             SharedObject.LOCK_FIND_ELEV.notifyAll();
@@ -390,19 +335,7 @@ public class Elevator extends Thread {
      * @return
      */
     public boolean isFull() {
-        int totalOccupied = 0;
-        for (final Person person : personInside) {
-            totalOccupied += person.getCapacity();
-        }
-        return totalOccupied >= MAX_SPACE;
-    }
-
-    int getAvailableSpace() {
-        int totalOccupied = 0;
-        for (final Person person : personInside) {
-            totalOccupied += person.getCapacity();
-        }
-        return MAX_SPACE - totalOccupied;
+        return currentOccupant >= MAX_SPACE;
     }
 
     /**
@@ -434,6 +367,20 @@ public class Elevator extends Thread {
     }
 
     /**
+     * @return the currentOccupant
+     */
+    public int getCurrentOccupant() {
+        return currentOccupant;
+    }
+
+    /**
+     * @param currentOccupant the currentOccupant to set
+     */
+    public void setCurrentOccupant(final int currentOccupant) {
+        this.currentOccupant = currentOccupant;
+    }
+
+    /**
      * @param currentFloor the currentFloor to set
      */
     public void setCurrentFloor(final Floor currentFloor) {
@@ -445,21 +392,20 @@ public class Elevator extends Thread {
      * @return
      */
     public boolean canAccomodatePerson(final Person person) {
-        return person.getCapacity() < getAvailableSpace();
+        return person.getCapacity() + currentOccupant < MAX_SPACE;
     }
 
     /**
      * @return
      */
     public boolean isOpen() {
-        return doorState == DoorState.OPEN;
+        return open;
     }
 
 
     @Override
     public String toString() {
-        //        return "MyLock";
-        return super.toString() + " " + getClass().getSimpleName() + "@"
+        return super.toString() + " " + getClass().getName() + "@"
                 + Integer.toHexString(hashCode());
     }
 

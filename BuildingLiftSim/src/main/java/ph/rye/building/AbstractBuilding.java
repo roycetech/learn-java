@@ -20,14 +20,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Logger;
 
 import ph.rye.building.facility.Elevator;
-import ph.rye.building.facility.ElevatorScheduler;
+import ph.rye.building.facility.ElevatorController;
 import ph.rye.building.facility.SharedObject;
-import ph.rye.building.util.AppException;
-import ph.rye.building.util.ThreadUtil;
-import ph.rye.common.lang.Ano;
-import ph.rye.logging.OneLogger;
 
 /**
  * @author royce
@@ -35,13 +32,15 @@ import ph.rye.logging.OneLogger;
 public abstract class AbstractBuilding {
 
 
-    private static final OneLogger LOGGER = OneLogger.getInstance();
+    private static final Logger LOGGER =
+            Logger.getLogger(AbstractBuilding.class.getName());
 
 
     /** Maps floor description to Floor Object */
     private final transient Map<String, Floor> descFloorMap = new HashMap<>();
 
 
+    //    private final transient int storey;
     private transient Floor[] floors;
 
 
@@ -51,8 +50,8 @@ public abstract class AbstractBuilding {
             .compareTo(elevator2.getType()));
 
 
-    private final transient ElevatorScheduler controller =
-            new ElevatorScheduler(this);
+    private final transient ElevatorController controller =
+            new ElevatorController(this);
 
 
     protected abstract void initFloors();
@@ -71,25 +70,6 @@ public abstract class AbstractBuilding {
     protected void addElevator(final Elevator elevator) {
         elevatorSet.add(elevator);
         SharedObject.getInstance().registerElevator(elevator);
-    }
-
-    void setStartingFloor(final int elevatorNumber, final String floor) {
-        final Elevator elevator = getElevatorByNumber(elevatorNumber);
-        elevator.setCurrentFloor(getFloor(elevatorNumber));
-    }
-
-    Elevator getElevatorByNumber(final int number) {
-
-        final Ano<Elevator> retval = new Ano<>();
-        for (final Elevator elevator : elevatorSet) {
-            if (elevator.getNumber() == number) {
-                retval.set(elevator);
-                break;
-            }
-        }
-
-        assert retval.get() != null;
-        return retval.get();
     }
 
     public Floor getFloor(final int floorNumber) {
@@ -112,13 +92,15 @@ public abstract class AbstractBuilding {
             String.format(
                 "Building %s is now operating!",
                 getClass().getSimpleName()));
+
+
     }
 
 
     /**
      * @return the controller
      */
-    ElevatorScheduler getController() {
+    ElevatorController getController() {
         return controller;
     }
 
@@ -138,34 +120,7 @@ public abstract class AbstractBuilding {
         for (final Floor floor : floorList) {
             descFloorMap.put(floor.getDisplay(), floor);
         }
-    }
 
-
-    /**
-     * Main thread will wait for couple of seconds before verifying that
-     * everyone is happy.
-     */
-    void verifyLiftsAndFloorsAreEmpty(final long secondsToWait) {
-
-        assert secondsToWait > 0;
-
-        ThreadUtil.sleep(1000 * secondsToWait);
-
-        for (int i = 0; i < floors.length; i++) {
-            if (floors[i].hasPeopleWaiting(Direction.UP)
-                    || floors[i].hasPeopleWaiting(Direction.DOWN)) {
-                throw new AppException("People waiting at: " + floors[i] + "!");
-            }
-        }
-
-        for (final Elevator elevator : elevatorSet) {
-            if (elevator.hasPeopleInside()) {
-                throw new AppException(
-                    "Person detected inside E" + elevator.getNumber() + "!");
-            }
-        }
-
-        LOGGER.info("Looks like everyone has gone about their business happy!");
     }
 
 }

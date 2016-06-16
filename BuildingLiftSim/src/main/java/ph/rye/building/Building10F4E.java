@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ph.rye.building.facility.Elevator;
-import ph.rye.common.lang.Range;
+import ph.rye.common.loop.Range;
 
 /**
  * @author royce
@@ -31,9 +31,7 @@ class Building10F4E extends AbstractBuilding {
     private static final int TOP_FLOOR = 9;
 
 
-    /* (non-Javadoc)
-     * @see ph.rye.condo.AbstractBuilding#initElevators(java.util.Map)
-     */
+    /** {@inheritDoc} */
     @Override
     public void initElevators() {
         addElevator(
@@ -66,9 +64,7 @@ class Building10F4E extends AbstractBuilding {
 
     }
 
-    /* (non-Javadoc)
-     * @see ph.rye.condo.AbstractBuilding#initFloors()
-     */
+    /** {@inheritDoc} */
     @Override
     protected void initFloors() {
         final List<Floor> floorList = new ArrayList<>();

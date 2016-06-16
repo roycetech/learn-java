@@ -16,7 +16,8 @@
 package ph.rye.building;
 
 import ph.rye.building.facility.Elevator;
-import ph.rye.building.facility.ElevatorScheduler;
+import ph.rye.building.facility.ElevatorController;
+import ph.rye.building.facility.SharedObject;
 import ph.rye.building.util.ThreadUtil;
 import ph.rye.common.lang.Ano;
 import ph.rye.logging.OneLogger;
@@ -25,9 +26,9 @@ import ph.rye.logging.OneLogger;
  * @author royce
  *
  */
+//public class Person extends Thread {
 @SuppressWarnings("PMD.DoNotUseThreads")
-public class Person extends Thread {
-    //public class Person implements Runnable {
+public class Person implements Runnable {
 
 
     private static final OneLogger LOGGER = OneLogger.getInstance();
@@ -38,17 +39,16 @@ public class Person extends Thread {
     }
 
 
-    private transient String name;
+    private final transient String name;
     private final transient Type type;
     private transient int capacity = 1;
 
 
-    private final transient ElevatorScheduler controller;
+    private final transient ElevatorController controller;
 
 
     private transient Floor currentFloor;
     private final transient Floor desiredFloor;
-    private final transient Direction desiredDirection;
     private final transient int delayMs;
 
 
@@ -80,11 +80,11 @@ public class Person extends Thread {
                 waitUntilLiftArriveAndOpen();
                 /* Arrived and a door is open/about to open. */
             } else {
-                LOGGER.debug(
+                LOGGER.info(
                     "[" + name + "] finds that lift is open/about to open...");
             }
 
-            elevator.set(pickElevator(desiredDirection));
+            elevator.set(pickElevator(getDesiredDirection()));
             if (elevator.get() == null) {
                 LOGGER.warn(
                     "[" + name
@@ -92,93 +92,84 @@ public class Person extends Thread {
                 continue;
             } else {
 
-                waitForElevatorToOpenAtFloor(elevator.get(), currentFloor);
-                enterElevator(elevator.get(), desiredDirection);
+                waitForElevatorToFullyOpen(elevator.get());
+
+                //final boolean canFitInside =
+                enterElevator(elevator.get(), getDesiredDirection());
+
+                //if (canFitInside) {
                 entered.set(true);
+                //} else {
+                //   LOGGER.warn("Did not fit!");
+                // }
             }
         } while (!entered.get());
 
+        waitForElevatorToReachDestination(elevator.get());
 
-        while (!elevator.get().getCurrentFloor().equals(desiredFloor)) {
-            ThreadUtil.wait(
-                elevator.get().synchronizer,
-                () -> LOGGER.debug(
-                    "[" + name + "] is waiting to reach desired floor..."),
-                () -> LOGGER.infof("%s arrived at destination, thanks!", name));
+        LOGGER.info(String.format("%s arrived at destination, thanks!", name));
+        ThreadUtil.sleep(1000);
 
-            //            synchronized(elevator) {
-            //                LOGGER
-            //                .debug("[" + name + "] is waiting to reach desired floor...");
-            //                elevator.wait();
-            //
-            ////                ThreadUtil.wait(elevator, ()->() -> LOGGER
-            ////                    .debug("[" + name + "] is waiting to reach desired floor..."), )
-            //
-            //                LOGGER.info(
-            //                    String.format("%s arrived at destination, thanks!", name));
-        }
-        //    }
-
-        //  ThreadUtil.safeWait(()->!elevator.get().getCurrentFloor().equals(desiredFloor),elevator,()->LOGGER.debug("["+name+"] is waiting to reach desired floor..."),()->LOGGER.info(String.format("%s arrived at destination, thanks!",name)));
-
-        waitForElevatorToOpenAtFloor(elevator.get(), getDesiredFloor());
-        leaveElevator(elevator.get());
+        stepOutOfElevator(elevator.get());
     }
 
 
-    /** */
-    private void waitForElevatorToOpenAtFloor(final Elevator elevator,
-                                              final Floor floor) {
-
+    /**
+     *
+     */
+    private void waitForElevatorToFullyOpen(final Elevator elevator) {
         while (!elevator.isOpen()
-                || !elevator.getCurrentFloor().equals(floor)) {
-            ThreadUtil.wait(elevator.door);
+                && !elevator.getCurrentFloor().equals(currentFloor)) {
+            ThreadUtil.wait(elevator, null);
         }
-
-        //        ThreadUtil.safeWait(
-        //            () -> !elevator.isOpen()
-        //                    || !elevator.getCurrentFloor().equals(floor),
-        //            elevator.door);
     }
+
 
     private void pickDesiredDirection() {
-
-        if (isGoingUp()) {
+        if (getDesiredDirection() == Elevator.Direction.UP) {
             if (!currentFloor.isPressedUp()) {
                 LOGGER.info("[" + name + "] pressed the [UP] button");
-                controller.pressUp(currentFloor);
+
+                ThreadUtil.syncedAction(
+                    SharedObject.LOCK_BUTTON,
+                    () -> controller.pressUp(currentFloor));
             }
         } else {
             if (!currentFloor.isPressedDown()) {
                 LOGGER.info(name + " pressed the [Down] button");
-                controller.pressDown(currentFloor);
+
+                ThreadUtil.syncedAction(
+                    SharedObject.LOCK_BUTTON,
+                    () -> controller.pressDown(currentFloor));
             }
         }
     }
 
+    private Elevator.Direction getDesiredDirection() {
+        return desiredFloor.getIndex() > currentFloor.getIndex()
+                ? Elevator.Direction.UP : Elevator.Direction.DOWN;
+    }
 
     @SuppressWarnings("PMD.UseNotifyAllInsteadOfNotify")
     private boolean enterElevator(final Elevator elevator,
-                                  final Direction desiredDirection) {
+                                  final Elevator.Direction desiredDirection) {
 
         final Ano<Boolean> retval = new Ano<>(false);
 
-        synchronized (elevator.door) {
+        synchronized (elevator) {
 
             if (elevator.canAccomodatePerson(this)) {
                 currentFloor.removePersonWaiting(this);
 
                 retval.set(true);
 
-                ThreadUtil.syncedAction(
-                    elevator.door,
-                    () -> ThreadUtil.longAction(() -> {
-                        LOGGER.info(
-                            "[" + name + "] is now entering lift: E"
-                                    + elevator.getNumber());
-                        elevator.admitPerson(this);
-                        // currentFloor.removePersonWaiting(this);
-                    } , null, 2000));
+                ThreadUtil.longAction(() -> {
+                    elevator.admitPerson(this);
+                    LOGGER.info(
+                        "[" + name + "] is now entering lift: E"
+                                + elevator.getNumber());
+                } , 2000);
+
 
                 if (!elevator.isFloorPressed(desiredFloor)) {
                     LOGGER.info(
@@ -189,22 +180,32 @@ public class Person extends Thread {
                 retval.set(false);
             }
 
-            elevator.door.notifyAll();
+            elevator.notifyAll();
         }
 
         return retval.get();
 
     }
 
-    private void leaveElevator(final Elevator elevator) {
-        synchronized (elevator.door) {
-            ThreadUtil.longAction(
-                () -> LOGGER.info(
+    private void stepOutOfElevator(final Elevator elevator) {
+        synchronized (elevator) {
+            ThreadUtil.longAction(() -> {
+                elevator.admitPerson(this);
+                LOGGER.info(
                     "[" + name + "] is now leaving lift: E"
-                            + elevator.getNumber()),
-                () -> elevator.dischargePerson(this),
-                2000);
-            elevator.door.notifyAll();
+                            + elevator.getNumber());
+            } , 2000);
+            elevator.notifyAll();
+        }
+    }
+
+
+    private void waitForElevatorToReachDestination(final Elevator elevator) {
+        while (!elevator.getCurrentFloor().equals(desiredFloor)) {
+            ThreadUtil.wait(
+                elevator,
+                () -> LOGGER.debug(
+                    "[" + name + "] is waiting to reach desired floor..."));
         }
     }
 
@@ -215,7 +216,7 @@ public class Person extends Thread {
      *
      * @param desiredDirection direction the person wants to go.
      */
-    private Elevator pickElevator(final Direction desiredDirection) {
+    private Elevator pickElevator(final Elevator.Direction desiredDirection) {
         final Ano<Elevator> retval = new Ano<>();
         for (final Elevator elevator : currentFloor.getOpenDoors()) {
             if (elevator.getCurrentDirection() == desiredDirection
@@ -237,12 +238,11 @@ public class Person extends Thread {
         }
     }
 
-    Person(final String name, final ElevatorScheduler controller,
+    Person(final String name, final ElevatorController controller,
             final Type type, final Floor currentFloor, final Floor desiredFloor,
             final int delayMs) {
 
         this.name = name;
-        setName(name);
         this.controller = controller;
 
         this.type = type;
@@ -250,13 +250,8 @@ public class Person extends Thread {
         this.currentFloor = currentFloor;
         this.desiredFloor = desiredFloor;
 
-        desiredDirection = desiredFloor.getIndex() > currentFloor.getIndex()
-                ? Direction.UP : Direction.DOWN;
-
-
         this.delayMs = delayMs;
 
-        setPriority(NORM_PRIORITY);
     }
 
     public Person initCapacity(final int capacity) {
@@ -286,42 +281,12 @@ public class Person extends Thread {
         this.currentFloor = currentFloor;
     }
 
-    public boolean isGoingUp() {
-        return desiredDirection == Direction.UP;
-    }
-
-    public boolean isGoingDown() {
-        return !isGoingUp();
-    }
-
 
     /**
      * @return the name
      */
-    public String getPersonName() {
+    public String getName() {
         return name;
-    }
-
-    /**
-     * @return the desiredFloor
-     */
-    public Floor getDesiredFloor() {
-        return desiredFloor;
-    }
-
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "(" + name + ")";
-    }
-
-
-    /**
-     * @param string
-     */
-    public void setPersonName(final String string) {
-        name = string;
-        setName(string);
     }
 
 }

@@ -15,10 +15,7 @@
  */
 package ph.rye.building.util;
 
-import ph.rye.building.facility.SharedObject;
-import ph.rye.common.lang.Action;
-import ph.rye.common.lang.Maker;
-import ph.rye.logging.OneLogger;
+import ph.rye.util.function.Callback;
 
 /**
  * @author royce
@@ -27,76 +24,22 @@ import ph.rye.logging.OneLogger;
 public final class ThreadUtil {
 
 
-    private static final OneLogger LOGGER = OneLogger.getInstance();
-
-
     private ThreadUtil() {}
 
 
-    /**
-     *
-     * @param maker
-     * @param monitor
-     * @param action before and after only.
-     */
-    public static void safeWait(final Maker<Boolean> maker,
-                                final Object monitor, final Action... action) {
-
-        safeWait(maker, monitor, 0, action);
-    }
-
-    /**
-     *
-     * @param checker
-     * @param monitor
-     * @param action before and after only.
-     */
-    public static void safeWait(final Maker<Boolean> maker,
-                                final Object monitor, final long millis,
-                                final Action... action) {
-
-        assert action == null || action.length < 4;
-        assert millis >= 0;
-
-        Action[] waitAction;
-        if (action.length == 3) {
-
-            if (action[0] != null) {
-                action[0].execute();
-            }
-
-            waitAction = new Action[2];
-            System.arraycopy(action, 1, waitAction, 0, 2);
-        } else {
-            waitAction = new Action[action.length];
-            System.arraycopy(action, 0, waitAction, 0, action.length);
-        }
-
-        while (maker.make()) {
-            wait(monitor, millis, waitAction);
-        }
-    }
-
-    public static void syncedAction(final Object monitor, final Action action) {
-
-        LOGGER
-            .info(Thread.currentThread() + " is synchronizing on: " + monitor);
-
+    public static void syncedAction(final Object monitor,
+                                    final Callback callback) {
         synchronized (monitor) {
-            if (action != null) {
-                action.execute();
-            }
+            callback.call();
             monitor.notifyAll();
         }
-        LOGGER.info(Thread.currentThread() + " notify on: " + monitor);
     }
 
-    public static void longAction(final Action before, final Action after,
-                                  final long millis) {
+    public static void longAction(final Callback callback, final long millis) {
         assert millis > 0;
 
-        if (before != null) {
-            before.execute();
+        if (callback != null) {
+            callback.call();
         }
 
         try {
@@ -104,11 +47,6 @@ public final class ThreadUtil {
         } catch (final InterruptedException e) {
             throw new AppException(e);
         }
-
-        if (after != null) {
-            after.execute();
-        }
-
     }
 
     public static void sleep(final long millis) {
@@ -121,45 +59,28 @@ public final class ThreadUtil {
         }
     }
 
-    public static void wait(final Object monitor, final Action... action) {
-        wait(monitor, 0, action);
+    public static void wait(final Object monitor, final Callback callback) {
+        wait(monitor, callback, 0);
     }
 
-    public static void wait(final Object monitor, final long millis,
-                            final Action... action) {
+    public static void wait(final Object monitor, final Callback callback,
+                            final long millis) {
 
         assert monitor != null;
         assert millis >= 0;
-        assert action.length <= 2;
-
-        LOGGER.info(Thread.currentThread() + " waiting on monitor: " + monitor);
 
         synchronized (monitor) {
 
-            if (action.length > 0 && action[0] != null) {
-                action[0].execute();
+            if (callback != null) {
+                callback.call();
             }
 
             try {
-                SharedObject.getInstance().waitSet
-                    .put(Thread.currentThread(), monitor);
-
                 monitor.wait(millis);
-                SharedObject.getInstance().waitSet
-                    .remove(Thread.currentThread());
-
-
-                LOGGER.info(
-                    Thread.currentThread() + " [WAKES UP] on monitor: "
-                            + monitor);
-
-                if (action.length > 1 && action[1] != null) {
-                    action[1].execute();
-                }
-
             } catch (final InterruptedException e) {
                 throw new AppException(e);
             }
+            //            monitor.notifyAll();
         }
     }
 
