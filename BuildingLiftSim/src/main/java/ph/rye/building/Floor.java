@@ -99,17 +99,13 @@ public class Floor {
         return number;
     }
 
-    /* (non-Javadoc)
-     * @see java.lang.Object#hashCode()
-     */
+    /** {@inheritDoc} */
     @Override
     public int hashCode() {
         return 31 * 1 + index;
     }
 
-    /* (non-Javadoc)
-     * @see java.lang.Object#equals(java.lang.Object)
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean equals(final Object obj) {
         final Ano<Boolean> retval = new Ano<>(false);
